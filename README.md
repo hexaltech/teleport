@@ -1,3 +1,9 @@
+# 🛡️ Teleport Zero Trust Lab — Hexaltech
+
+Ce dépôt contient l'**Infrastructure as Code (IaC)** et la **documentation technique** d’un laboratoire de sécurité **Zero Trust** basé sur **Teleport**.
+
+Le projet démontre comment **sécuriser et unifier l’accès** à une infrastructure hybride (**Linux, Kubernetes, IoT, Windows / Active Directory**) **sans VPN**, **sans ports exposés**, tout en garantissant une **traçabilité complète** (audit logs, replay de sessions).
+
 ---
 
 ## 🚀 Fonctionnalités du Lab
