@@ -2,7 +2,7 @@
 
 # ☁️ Configuration Complète : DNS, Réseau et SSL Wildcard
 
-Ce guide couvre l'intégralité de la mise en service externe de Teleport : configuration des ports (NAT), enregistrements DNS Cloudflare (A et CNAME) et l'automatisation du certificat SSL Wildcard.
+Ce guide couvre l'intégralité de la mise en service externe de Teleport : La configuration des ports (NAT), l'enregistrements DNS Cloudflare (A et CNAME) et l'automatisation du certificat SSL Wildcard.
 
 ---
 
