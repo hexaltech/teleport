@@ -1,32 +1,33 @@
+```markdown
 # 🛡️ Teleport Zero Trust Lab - Hexaltech
 
-Ce dépôt contient la configuration et les scripts de déploiement d'un laboratoire de sécurité **Zero Trust** utilisant **Teleport**. Ce projet démontre comment centraliser l'accès à une infrastructure hybride (On-premise & Cloud) tout en supprimant la dépendance aux VPN et aux mots de passe statiques.
+Ce dépôt contient l'Infrastructure as Code (IaC) et la documentation technique d'un laboratoire de sécurité **Zero Trust** basé sur **Teleport**.
+
+Ce projet démontre comment sécuriser et unifier l'accès à une infrastructure hybride (Linux, Kubernetes, IoT, Windows) sans utiliser de VPN, ni ouvrir de ports, tout en garantissant une traçabilité totale (Audit logs, Replay de sessions).
+
+
 
 ## 🚀 Fonctionnalités du Lab
 
-* **Authentification SSO (GitHub)** : Connexion sécurisée déléguée à GitHub avec gestion des rôles par équipe.
-* **Certificat Wildcard Automatique** : Utilisation du protocole ACME avec le challenge DNS-01 de **Cloudflare** pour sécuriser tous les sous-domaines.
-* **Accès aux Applications (App Access)** : Publication sécurisée d'une interface web d'imprimante locale via un tunnel TLS.
-* **Infrastructure Hybride** : Gestion centralisée d'instances **AWS EC2** (Linux) et d'un environnement **Active Directory** local (Hyper-V).
-* **Audit & Compliance** : Enregistrement intégral des sessions SSH/RDP et journalisation des requêtes SQL/HTTP.
+* **Authentification SSO** : Connexion centralisée déléguée à **GitHub** (plus de clés SSH locales à gérer).
+* **Kubernetes Access (K8s)** : Intégration d'un cluster **K3s** via l'agent Teleport (Helm Chart), utilisant un tunnel inversé sécurisé.
+* **HTTPS Universel** : Certificats **SSL Wildcard** automatiques via le challenge DNS-01 de **Cloudflare**.
+* **App Access** : Exposition sécurisée d'interfaces web internes (Imprimante, Outils Admin) sans IP publique.
+* **Audit & Conformité** : Enregistrement vidéo des sessions terminaux et journalisation des requêtes `kubectl`.
 
-## 🛠️ Structure du Projet
+## 📂 Structure du Dépôt
 
-* `install.sh` : Script d'automatisation pour installer Teleport sur une VM Debian/Ubuntu vierge.
-* `CLOUDFLARE_GUIDE.md` : Procédure détaillée pour la mise en place du certificat SSL Wildcard.
-* `/config` : Modèles de fichiers `teleport.yaml` (Template).
+* **`install.sh`** : Script Bash d'automatisation pour déployer le Bastion Teleport sur Debian 12.
+* **`CLOUDFLARE_GUIDE.md`** : Procédure pour la mise en place du certificat SSL Wildcard et la gestion du Token API.
+* **`KUBERNETES_GUIDE.md`** : Guide d'intégration d'un cluster Kubernetes via Helm (Agent interne).
+* **`/config`** : Modèles de fichiers de configuration YAML.
 
 ---
 
 ## ⚙️ Installation Rapide
 
-### 1. Prérequis
-
-Une VM Debian 12 (Bookworm) avec une adresse IP publique ou un accès internet configuré (Routage VLAN opérationnel pour le lab local).
-
-### 2. Déploiement du Bastion
-
-Récupérez le script et lancez l'installation (Après l'avoir modifié en fonction de votre config !!) :
+### 1. Déploiement du Bastion
+Le script `install.sh` installe les dépendances, configure le dépôt APT officiel de Teleport et prépare la structure des fichiers.
 
 ```bash
 chmod +x install.sh
@@ -35,27 +36,48 @@ sudo ./install.sh
 ```
 
 > [!IMPORTANT]
-> Le script vous demandera de saisir votre **Nom de domaine** (ex: `teleport.hexaltech.fr`) et votre **Email**. Ces informations sont cruciales pour la génération des certificats SSL.
+> Le script est interactif : il vous demandera votre **nom de domaine** (ex: `teleport.hexaltech.fr`) et votre **email** pour la génération des certificats ACME.
 
-### 3. Configuration de la Sécurité (DNS)
+### 2. Sécurisation DNS (Cloudflare)
 
-Pour activer le cadenas vert sur toutes vos applications, suivez le [Guide Cloudflare](https://www.google.com/search?q=./CLOUDFLARE_GUIDE.md) pour injecter votre Token API de manière sécurisée.
+Pour activer le HTTPS sans erreurs de sécurité, suivez le guide dédié :
+👉 **[Voir le guide Cloudflare](https://www.google.com/search?q=./CLOUDFLARE_GUIDE.md)**
 
----
+### 3. Connexion au Cluster Kubernetes
 
-## ⚠️ Personnalisation (Best Practices)
-
-Pour adapter ce lab à votre propre réseau, vous devez modifier les sections suivantes dans `/etc/teleport.yaml` :
-
-1. **Section `auth_service**` : Changez le `cluster_name` pour qu'il corresponde à votre domaine DNS.
-2. **Section `app_service**` : Modifiez l'URI de l'imprimante ou des outils internes (ex: `http://192.168.x.x`).
-3. **Section `ssh_service**` : Activez ou désactivez l'accès SSH selon vos besoins de sécurité.
+L'intégration ne nécessite aucune modification complexe sur le Bastion. Tout se fait via l'agent Helm sur le cluster cible :
+👉 **[Voir le guide Kubernetes](https://www.google.com/search?q=./KUBERNETES_GUIDE.md)**
 
 ---
 
-## 📝 Défis Techniques Relevés
+## ⚠️ Personnalisation
 
-* **Routage Inter-VLAN** : Configuration du bastion pour communiquer avec des équipements sur des segments réseau isolés (VLAN IoT pour l'imprimante).
-* **Persistance HSTS** : Résolution des conflits de certificats navigateurs lors de la mise en place du Wildcard DNS.
-* **Identity Mapping** : Corrélation entre les identités GitHub et les rôles RBAC (Role-Based Access Control) de Teleport.
+Ce projet est configuré pour l'environnement **Hexaltech**. Avant de l'utiliser, adaptez le fichier `/etc/teleport.yaml` :
+
+1. **Identity** : Remplacez `teleport.hexaltech.fr` par votre FQDN.
+2. **App Service** : Modifiez les IPs cibles pour vos applications internes (Section `app_service`).
+```yaml
+app_service:
+  apps:
+  - name: "mon-app"
+    uri: "[http://192.168.1.50](http://192.168.1.50)" # Votre IP locale
+
+```
+
+
+3. **RBAC** : Ajustez les rôles utilisateurs via `tctl edit role` pour mapper vos équipes GitHub aux droits Kubernetes (`system:masters`, etc.).
+
+---
+
+## 👨‍💻 Défis Techniques Relevés
+
+* **Architecture Agentless vs Agent** : Transition d'une connexion K8s directe (Kubeconfig) vers une architecture **Agent Helm** pour une meilleure robustesse réseau.
+* **Routage Inter-VLAN** : Communication sécurisée entre le Bastion (DMZ) et les ressources critiques (K3s, IoT) situées dans des VLANs isolés.
+* **Automatisation ACME** : Gestion du cycle de vie des certificats SSL via l'API Cloudflare pour éviter les renouvellements manuels.
+
+---
+
+**Auteur** : Hexaltech - *Lab Zero Trust & DevSecOps*
+
+```
 
