@@ -1,3 +1,8 @@
+Voici ton fichier `README.md` mis à jour. J'ai intégré la nouvelle brique **Windows / Active Directory** en respectant le style et la structure de ton document existant.
+
+J'ai ajouté une référence à un fichier `WINDOWS_AD_GUIDE.md` (qui correspond au guide détaillé que je t'ai généré juste avant), car la procédure AD est trop longue pour tenir uniquement dans le README principal.
+
+```markdown
 # 🛡️ Teleport Zero Trust Lab — Hexaltech
 
 Ce dépôt contient l'Infrastructure as Code (IaC) et la documentation technique d’un laboratoire de sécurité **Zero Trust** basé sur **Teleport**.
@@ -29,3 +34,68 @@ Le script `install.sh` installe les dépendances, configure le dépôt APT offic
 ```bash
 chmod +x install.sh
 sudo ./install.sh
+
+```
+
+> **⚠️ Important** : Le script est interactif. Il demande :
+> * Le **nom de domaine** (ex. `teleport.hexaltech.fr`)
+> * L’**adresse email** utilisée pour la génération des certificats ACME
+> 
+> 
+
+### 2. Sécurisation DNS (Cloudflare)
+
+Pour activer le HTTPS sans avertissements de sécurité, suivez la procédure dédiée :
+👉 **[Voir le guide Cloudflare](https://www.google.com/search?q=CLOUDFLARE_GUIDE.md)**
+
+### 3. Connexion au cluster Kubernetes
+
+Aucune modification lourde côté bastion. L’intégration se fait exclusivement via l’agent Helm déployé sur le cluster cible :
+👉 **[Voir le guide Kubernetes](https://www.google.com/search?q=KUBERNETES_GUIDE.md)**
+
+### 4. Intégration Active Directory (Windows)
+
+Configuration de l'AD (AD CS, GPO RemoteFX, NLA désactivé) et du bastion pour la découverte LDAP :
+👉 **[Voir le guide Windows & AD](https://www.google.com/search?q=WINDOWS_AD_GUIDE.md)**
+
+## ⚠️ Personnalisation
+
+Ce projet est préconfiguré pour l’environnement **Hexaltech**. Avant toute utilisation, adaptez le fichier `/etc/teleport.yaml`.
+
+### Points à modifier
+
+1. **Identity** : Remplacez `teleport.hexaltech.fr` par votre FQDN.
+2. **App Service** : Ajustez les IP cibles de vos applications internes.
+```yaml
+app_service:
+  apps:
+    - name: "mon-app"
+      uri: "[http://192.168.1.50](http://192.168.1.50)" # IP locale de l'application
+
+```
+
+
+3. **Windows Service** : Mettez à jour les infos de votre domaine AD.
+```yaml
+windows_desktop_service:
+  ldap:
+    addr: "192.168.20.150:636"      # IP de votre AD
+    domain: "hexaltech.lan"         # Votre domaine
+    sid: "S-1-5-21-..."             # SID du compte svc-teleport
+
+```
+
+
+4. **RBAC** : Adaptez les rôles utilisateurs via `tctl edit role` pour mapper vos équipes GitHub aux droits Kubernetes (`system:masters`) et aux logins Windows (`Administrateur`).
+
+## 👨‍💻 Défis techniques relevés
+
+* **Architecture Agentless vs Agent** : Passage d’un accès Kubernetes direct (kubeconfig) à une architecture **agent Helm**, plus robuste et résiliente réseau.
+* **Routage inter-VLAN** : Communication sécurisée entre le bastion (DMZ) et des ressources critiques (K3s, IoT, AD) situées dans des VLANs isolés.
+* **Protocole RDP & Certificats** : Mise en place du **LDAPS**, gestion des **GPO** pour RemoteFX et suppression de l'authentification NLA pour permettre le "Passwordless" via Smart Card virtuelle.
+* **Automatisation ACME** : Gestion complète du cycle de vie des certificats SSL via l’API Cloudflare, sans renouvellement manuel.
+
+---
+```
+
+```
