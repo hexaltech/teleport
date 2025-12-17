@@ -26,7 +26,7 @@ Une VM Debian 12 (Bookworm) avec une adresse IP publique ou un accès internet c
 
 ### 2. Déploiement du Bastion
 
-Récupérez le script et lancez l'installation :
+Récupérez le script et lancez l'installation (Après l'avoir modifié en fonction de votre config !!) :
 
 ```bash
 chmod +x install.sh
@@ -58,3 +58,4 @@ Pour adapter ce lab à votre propre réseau, vous devez modifier les sections su
 * **Routage Inter-VLAN** : Configuration du bastion pour communiquer avec des équipements sur des segments réseau isolés (VLAN IoT pour l'imprimante).
 * **Persistance HSTS** : Résolution des conflits de certificats navigateurs lors de la mise en place du Wildcard DNS.
 * **Identity Mapping** : Corrélation entre les identités GitHub et les rôles RBAC (Role-Based Access Control) de Teleport.
+
