@@ -1,50 +1,63 @@
-### Fichier : `KUBERNETES_GUIDE.md`
-
-```markdown
 # ☸️ Intégration Kubernetes (K3s) avec Teleport
 
-Ce guide explique comment connecter un cluster Kubernetes (ici **K3s**) à Teleport en utilisant l'agent officiel **Teleport Kube Agent** via Helm. Cette méthode permet une connexion via un **tunnel inversé**, ne nécessitant aucune ouverture de port entrant sur le pare-feu du cluster.
+Ce guide décrit l’intégration d’un cluster Kubernetes (ici **K3s**) avec **Teleport** via l’agent officiel **Teleport Kube Agent** déployé avec Helm.
+
+Cette approche repose sur un **tunnel inversé** : aucun port entrant n’est exposé sur le cluster Kubernetes.
+
+---
 
 ## 1. Prérequis
-- Un cluster Kubernetes fonctionnel (ex: K3s).
-- L'outil `helm` installé sur le nœud maître du cluster.
-- Un accès administrateur à l'interface Web de Teleport.
 
-## 2. Installation de Helm (Si nécessaire)
-Sur le serveur Kubernetes (K3s), installez le gestionnaire de paquets Helm :
+* Cluster Kubernetes fonctionnel (ex. **K3s**).
+* Outil **Helm** installé sur le nœud maître du cluster.
+* Accès administrateur à l’interface Web de Teleport.
+
+---
+
+## 2. Installation de Helm (si nécessaire)
+
+Sur le serveur Kubernetes (K3s), installez Helm :
 
 ```bash
-curl [https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3](https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3) | bash
-
+curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 ```
 
-> [!NOTE]
-> Pour K3s, assurez-vous de définir la variable d'environnement pour que Helm trouve la configuration :
-> `export KUBECONFIG=/etc/rancher/k3s/k3s.yaml`
+> ℹ️ **Note (K3s)**
+> Assurez-vous que Helm utilise le bon kubeconfig :
+>
+> ```bash
+> export KUBECONFIG=/etc/rancher/k3s/k3s.yaml
+> ```
 
-## 3. Génération de la commande d'enrollment
+---
 
-L'installation se fait via une commande générée dynamiquement par Teleport contenant un jeton de sécurité éphémère.
+## 3. Génération de la commande d’enrôlement
 
-1. Connectez-vous à l'interface Web de Teleport.
-2. Allez dans **Resources** > **Add New** > **Kubernetes**.
-3. Remplissez les champs :
-* **Teleport Service Namespace** : `teleport-agent`
-* **Kubernetes Cluster Name** : `k3s-hexaltech` (ou votre nom)
+L’installation de l’agent repose sur une commande générée dynamiquement par Teleport, incluant un **token éphémère**.
 
+1. Connectez-vous à l’interface Web de Teleport.
+
+2. Naviguez vers **Resources** → **Add New** → **Kubernetes**.
+
+3. Renseignez les champs suivants :
+
+   * **Teleport Service Namespace** : `teleport-agent`
+   * **Kubernetes Cluster Name** : `k3s-hexaltech` (ou votre nom de cluster)
 
 4. Cliquez sur **Generate Command**.
 
-## 4. Déploiement de l'Agent
+---
 
-Copiez la commande générée et exécutez-la sur votre serveur Kubernetes. Elle ressemble à ceci :
+## 4. Déploiement de l’agent Kubernetes
+
+Copiez la commande générée et exécutez-la sur le serveur Kubernetes. Exemple générique :
 
 ```bash
-# Ajout du dépôt officiel
-helm repo add teleport [https://charts.releases.teleport.dev](https://charts.releases.teleport.dev)
+# Ajout du dépôt officiel Teleport
+helm repo add teleport https://charts.releases.teleport.dev
 helm repo update
 
-# Installation de l'agent (Exemple générique)
+# Installation de l'agent
 helm install teleport-agent teleport/teleport-kube-agent \
   --create-namespace \
   --namespace teleport-agent \
@@ -52,77 +65,83 @@ helm install teleport-agent teleport/teleport-kube-agent \
   --set proxyAddr=teleport.votre-domaine.fr:443 \
   --set authToken=VOTRE_TOKEN_SECRET_ICI \
   --set kubeClusterName=k3s-hexaltech
-
 ```
 
-Vérifiez que l'agent est opérationnel :
+Vérifiez le bon fonctionnement de l’agent :
 
 ```bash
 kubectl get pods -n teleport-agent
-
 ```
 
-*Le statut doit passer à `Running`.*
+Le ou les pods doivent être à l’état **Running**.
 
-## 5. Configuration des Permissions (RBAC)
+---
 
-Pour qu'un utilisateur Teleport puisse agir sur le cluster, son rôle doit être mappé à un groupe Kubernetes.
+## 5. Configuration des permissions (RBAC)
 
-### Dans l'interface Teleport (Mapping)
+Pour autoriser un utilisateur Teleport à interagir avec le cluster, son rôle doit être mappé à des **groupes Kubernetes**.
 
-Lors de la connexion, Teleport demande quels droits utiliser. Pour un accès administrateur complet :
+### 5.1 Mapping côté Teleport (UI)
+
+Lors de la connexion au cluster via Teleport :
 
 * **Kubernetes Groups** : `system:masters`
 * **Kubernetes User** : `admin`
 
-### Dans le rôle Teleport (YAML)
+Ce mapping est sélectionné dynamiquement lors de la session.
 
-Assurez-vous que le rôle de l'utilisateur (ex: `access` ou `editor`) autorise ce mapping.
-Éditez le rôle via le terminal du Bastion :
+---
+
+### 5.2 Configuration du rôle Teleport (YAML)
+
+Le rôle Teleport doit explicitement autoriser ces groupes Kubernetes.
+
+Éditez le rôle concerné depuis le bastion Teleport :
 
 ```bash
 sudo tctl edit role access
-
 ```
 
-Ajoutez/Modifiez la section `kubernetes_groups` :
+Ajoutez ou ajustez la section suivante :
 
 ```yaml
 allow:
   kubernetes_labels:
     '*': '*'
-  kubernetes_groups: ["system:masters", "developers"]
-
+  kubernetes_groups:
+    - system:masters
+    - developers
 ```
 
-## 6. Accès Client (Développeur)
+---
 
-Une fois configuré, l'accès au cluster se fait depuis le poste de travail du développeur (pas depuis le serveur).
+## 6. Accès côté client (développeur)
 
-**1. Authentification au Bastion :**
+L’accès au cluster se fait **depuis le poste de travail** de l’utilisateur, jamais directement depuis le serveur Kubernetes.
+
+### 6.1 Authentification au bastion Teleport
 
 ```bash
 tsh login --proxy=teleport.votre-domaine.fr --auth=github
-
 ```
 
-**2. Connexion au Cluster K8s :**
+---
+
+### 6.2 Connexion au cluster Kubernetes
 
 ```bash
 tsh kube login k3s-hexaltech
-
 ```
 
-*Cette commande met à jour automatiquement le fichier `~/.kube/config` local.*
+Cette commande met automatiquement à jour le fichier `~/.kube/config` local.
 
-**3. Utilisation standard :**
+---
+
+### 6.3 Utilisation standard de kubectl
 
 ```bash
 kubectl get pods
 kubectl exec -it nginx -- /bin/bash
-
 ```
 
-Toutes les commandes sont désormais auditées et enregistrées par Teleport.
-
-```
+Toutes les actions Kubernetes sont **auditées**, **journalisées** et **traçables** via Telepo
