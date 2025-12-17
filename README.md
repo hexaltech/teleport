@@ -1,19 +1,20 @@
-# 🛡️ Teleport Zero Trust Lab - Hexaltech
+## 🛠️ Installation et Personnalisation
 
-Ce dépôt contient la configuration et les scripts de déploiement de mon laboratoire de sécurité **Zero Trust**.
+> [!IMPORTANT]
+> Ce projet est configuré pour l'infrastructure **Hexaltech**. Avant de lancer l'installation, vous devez adapter les fichiers à votre propre environnement.
 
-## 🏗️ Architecture
-- **Bastion** : Debian 12 (Bookworm) sous Teleport v15.
-- **Sécurité** : Certificats TLS Wildcard via **Cloudflare DNS-01** challenge.
-- **Identité** : SSO intégré avec **GitHub**.
-- **Cibles** : Instances AWS EC2, Active Directory local, et Imprimante réseau (IoT).
+### 1. Adaptation du script d'installation
+Avant d'exécuter `install.sh`, assurez-vous de modifier les variables suivantes dans le script ou dans le fichier `/etc/teleport.yaml` généré :
 
-## 🛠️ Comment utiliser ce script ?
-1. Cloner ce repo sur une VM Debian vierge.
-2. Lancer `./install.sh`.
-3. Configurer le token Cloudflare pour le certificat SSL :
-   ```bash
-   sudo systemctl edit teleport
-   # Ajouter :
-   # [Service]
-   # Environment='CLOUDFLARE_API_TOKEN=votre_token'
+- **`cluster_name`** : Remplacez `teleport.hexaltech.fr` par votre propre nom de domaine.
+- **`public_addr`** : Doit correspondre à votre URL d'accès externe.
+- **`email`** : Remplacez `contact@hexaltech.fr` par votre adresse email pour recevoir les alertes de renouvellement Let's Encrypt (ACME).
+- **`nodename`** : Donnez un nom unique à votre bastion.
+
+### 2. Configuration Cloudflare
+Si vous utilisez Cloudflare pour le certificat SSL Wildcard, n'oubliez pas d'injecter votre propre Token API :
+```bash
+sudo systemctl edit teleport
+# Ajoutez vos informations :
+[Service]
+Environment='CLOUDFLARE_API_TOKEN=VOTRE_TOKEN_PERSONNEL'
