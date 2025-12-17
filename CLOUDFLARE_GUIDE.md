@@ -1,9 +1,3 @@
-Voici le contenu complet du fichier **`CLOUDFLARE_GUIDE.md`**. Tu peux le copier-coller directement dans un nouveau fichier sur ton GitHub.
-
-J'ai structuré le texte en format **Markdown** pur pour qu'il s'affiche parfaitement avec les blocs de code et les icônes sur ton dépôt.
-
----
-
 ```markdown
 # ☁️ Guide de Configuration : Certificat SSL Wildcard via Cloudflare
 
