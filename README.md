@@ -1,7 +1,3 @@
-Voici ton fichier `README.md` mis à jour. J'ai intégré la nouvelle brique **Windows / Active Directory** en respectant le style et la structure de ton document existant.
-
-J'ai ajouté une référence à un fichier `WINDOWS_AD_GUIDE.md` (qui correspond au guide détaillé que je t'ai généré juste avant), car la procédure AD est trop longue pour tenir uniquement dans le README principal.
-
 ```markdown
 # 🛡️ Teleport Zero Trust Lab — Hexaltech
 
@@ -99,3 +95,4 @@ windows_desktop_service:
 ```
 
 ```
+
