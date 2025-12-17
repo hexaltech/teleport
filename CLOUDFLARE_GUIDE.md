@@ -1,125 +1,120 @@
-# ☁️ Configuration d’un certificat SSL wildcard via Cloudflare
+---
 
-Ce guide décrit la mise en place d’un certificat **SSL wildcard** (`*.teleport.votre-domaine.fr`) pour sécuriser l’ensemble d’une infrastructure **Teleport** : proxy web, App Access et applications internes (imprimante, outils web, etc.).
+# ☁️ Configuration Complète : DNS, Réseau et SSL Wildcard
 
-L’automatisation repose sur **ACME + DNS-01 via Cloudflare**, sans exposition de ports supplémentaires.
+Ce guide couvre l'intégralité de la mise en service externe de Teleport : configuration des ports (NAT), enregistrements DNS Cloudflare (A et CNAME) et l'automatisation du certificat SSL Wildcard.
 
 ---
 
-## 1. Pourquoi un certificat wildcard
+## 1. Configuration Réseau (NAT / Pare-feu)
 
-Sans certificat wildcard, chaque nouvelle application exposée par Teleport (ex. `imprimante-lab.teleport.hexaltech.fr`) entraîne :
+Pour que Teleport soit accessible depuis Internet, vous devez configurer une redirection de port (Port Forwarding / NAT) sur votre routeur ou pare-feu vers l'IP locale de votre serveur Teleport.
 
-* erreurs navigateur **HSTS**
-* avertissements « Connexion non privée »
-* expérience utilisateur dégradée
-
-Le challenge **DNS-01 Cloudflare** permet à Teleport de prouver la possession du domaine et d’obtenir un certificat valide pour **tous les sous-domaines**, automatiquement.
+| Port | Protocole | Usage |
+| --- | --- | --- |
+| **443** | TCP | **Proxy Web** (Interface UI + App Access + ACME) |
+| **3023** | TCP | **SSH Proxy** (Connexion via terminal `tsh login`) |
+| **3025** | TCP | **Auth Service** (Connexion des agents/nœuds distants) |
 
 ---
 
-## 2. Création du jeton API Cloudflare
+## 2. Configuration DNS Cloudflare
 
-1. Connectez-vous à l’interface Cloudflare.
+Vous devez créer deux enregistrements essentiels dans votre zone DNS `hexaltech.fr` pour pointer vers votre IP publique.
 
+### A. Enregistrement A (Le Bastion)
+
+Lien entre le nom de domaine principal et votre adresse IP publique.
+
+* **Type** : `A`
+* **Nom (Name)** : `teleport`
+* **Contenu (IPv4)** : `VOTRE_IP_PUBLIQUE`
+* **Proxy status** : ☁️ **DNS Only** (Gris)
+
+### B. Enregistrement CNAME (Le Wildcard)
+
+Indispensable pour rediriger toutes les futures applications (ex: `imprimante.teleport...`) vers le bastion sans créer un enregistrement à chaque fois.
+
+* **Type** : `CNAME`
+* **Nom (Name)** : `*.teleport`
+* **Cible (Target)** : `teleport.hexaltech.fr`
+* **Proxy status** : ☁️ **DNS Only** (Gris)
+
+---
+
+## 3. Création du jeton API Cloudflare (SSL)
+
+1. Connectez-vous à Cloudflare.
 2. Allez dans **Profil utilisateur** → **Jetons API**.
+3. Cliquez sur **Créer un jeton** → modèle **Modifier le DNS de zone**.
+4. Configurez :
+* **Permissions** : `Zone` → `DNS` → `Modifier`
+* **Ressources** : `Inclure` → `Zone spécifique` → `hexaltech.fr`
 
-3. Cliquez sur **Créer un jeton**.
 
-4. Sélectionnez le modèle **Modifier le DNS de zone**.
-
-5. Configurez précisément :
-
-   * **Permissions** : `Zone` → `DNS` → `Modifier`
-   * **Ressources de zone** : `Inclure` → `Zone spécifique` → votre domaine (ex. `hexaltech.fr`)
-
-6. Générez le jeton et copiez-le immédiatement.
-
-⚠️ Ce jeton ne sera plus affiché. Conservez-le de manière sécurisée.
+5. Copiez le jeton généré (il ne sera affiché qu'une seule fois).
 
 ---
 
-## 3. Injection sécurisée du jeton sur le bastion
+## 4. Injection sécurisée du jeton sur le serveur
 
-Le jeton **ne doit jamais** être écrit en clair dans `teleport.yaml`. Il est injecté via une variable d’environnement systemd.
-
-### 3.1 Édition du service systemd
+Pour éviter d'écrire le jeton en clair dans le fichier YAML, on utilise une variable d'environnement systemd.
 
 ```bash
 sudo systemctl edit teleport
+
 ```
 
-### 3.2 Ajout de la variable d’environnement
-
-Ajoutez le bloc suivant entre les commentaires :
+Ajoutez ce bloc entre les lignes de commentaires :
 
 ```ini
 [Service]
 Environment="CLOUDFLARE_API_TOKEN=VOTRE_JETON_API_ICI"
+
 ```
 
-### 3.3 Rechargement de systemd
+Rechargez la configuration :
 
 ```bash
 sudo systemctl daemon-reload
+
 ```
 
 ---
 
-## 4. Configuration ACME dans Teleport
+## 5. Configuration ACME dans Teleport
 
-Éditez le fichier `/etc/teleport.yaml` pour activer ACME :
+Éditez le fichier `/etc/teleport.yaml` pour activer la gestion automatique :
 
 ```yaml
 proxy_service:
   enabled: "yes"
   web_listen_addr: 0.0.0.0:443
-  public_addr: teleport.hexaltech.fr:443  # À adapter à votre domaine
+  public_addr: teleport.hexaltech.fr:443
   acme:
     enabled: "yes"
-    email: "contact@hexaltech.fr"         # Email Let's Encrypt
+    email: "contact@hexaltech.fr"
+
 ```
-
-Points critiques :
-
-* `public_addr` doit correspondre exactement au FQDN public
-* le port **443** doit être accessible côté proxy Teleport
 
 ---
 
-## 5. Activation et supervision
+## 6. Activation et Vérification
 
-Redémarrez Teleport pour déclencher la demande de certificat :
+Redémarrez le service pour déclencher la demande de certificat SSL :
 
 ```bash
 sudo systemctl restart teleport
+
 ```
 
-Surveillez les logs ACME :
+Vérifiez les logs pour confirmer le succès de l'opération :
 
 ```bash
 sudo journalctl -fu teleport | grep -i acme
-```
-
-Vous devez observer une séquence indiquant l’obtention du certificat wildcard.
-
----
-
-## 6. Validation finale
-
-Testez immédiatement un sous-domaine exposé via Teleport, par exemple :
 
 ```
-imprimante-lab.teleport.votre-domaine.fr
-```
 
-Le certificat doit être valide, avec un cadenas navigateur sans avertissement.
+### Test final
 
----
-
-## 🔐 Rappel de sécurité
-
-* Ce jeton autorise la modification de votre DNS public.
-* Ne le commitez jamais dans un dépôt Git.
-* Évitez les permissions trop larges.
-* Utilisez uniquement des variables d’environnement ou un gestionnaire de secrets.
+Accédez à `https://teleport.hexaltech.fr` depuis un réseau externe. Le cadenas doit être valide (Let's Encrypt) et toutes vos applications sous `*.teleport.hexaltech.fr` seront automatiquement sécurisées.
