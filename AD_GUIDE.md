@@ -202,5 +202,3 @@ Restart-Computer -Force
 
 * Le service de découverte met 5 à 10 minutes pour scanner les nouveaux PC.
 * Pour forcer un scan : `sudo systemctl restart teleport` sur le bastion.
-
-```
