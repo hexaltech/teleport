@@ -204,5 +204,3 @@ Restart-Computer -Force
 * Pour forcer un scan : `sudo systemctl restart teleport` sur le bastion.
 
 ```
-
-```
