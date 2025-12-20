@@ -1,145 +1,158 @@
-# 🏰 Guide d'Implémentation Teleport Desktop Access (Hexaltech)
+```markdown
+# 🏰 Guide d'Implémentation Teleport Desktop Access (SSO GitHub & AD)
 
-Ce document détaille l'installation complète de l'accès sécurisé aux serveurs Windows (Active Directory) via **Teleport**, en utilisant l'authentification par certificat (Smart Card virtuelle) et le protocole LDAPS.
+Ce document détaille l'installation complète de l'accès sécurisé aux serveurs et PC Windows via **Teleport**, en utilisant **GitHub** pour l'authentification des utilisateurs (SSO) et le protocole LDAPS pour la liaison technique.
 
 ## 🏗️ Architecture
 
 * **Cluster Teleport** : `https://teleport.hexaltech.fr`
-* **Bastion Linux** : `192.168.20.250` (Services : Proxy, Auth, Windows Desktop)
-* **Active Directory (AD)** : `192.168.20.150` (Windows Server 2025)
+* **Bastion Linux** : `192.168.50.250` (Services : Proxy, Auth, Windows Desktop, Discovery, Apps)
+* **Active Directory (AD)** : `192.168.50.150` (Windows Server 2025)
 * **Domaine** : `hexaltech.lan`
+* **Clients** : Découverte automatique des PC joints au domaine.
+* **Imprimantes** : Accès sécurisé via le module Applications.
 
 ---
 
-## 🖥️ Phase 1 : Préparation de l'Active Directory (Windows)
+## 🐙 Phase 1 : Configuration GitHub (SSO)
 
-### Étape 1 : Activation du LDAPS (Port 636)
+### 1. Prérequis GitHub
+1.  Créer une **Organisation** sur GitHub (ex: `hexaltech-organization`).
+2.  Créer une **Équipe** dans cette organisation (ex: `admins`).
+3.  Ajouter les utilisateurs dans cette équipe.
 
-Sur une installation Windows Server fraîche, le port sécurisé 636 est fermé par défaut.
+### 2. Création de l'application OAuth
+Dans **GitHub > Settings > Developer settings > OAuth Apps** :
+* **Homepage URL** : `https://teleport.hexaltech.fr`
+* **Callback URL** : `https://teleport.hexaltech.fr/v1/webapi/github/callback`
+* **⚠️ Important :** Dans "Authorized OAuth Apps", cliquer sur **Grant** à côté de l'organisation pour autoriser l'accès.
 
-1. Ouvrir le **Gestionnaire de serveur**.
-2. Ajouter le rôle **Services de certificats Active Directory (AD CS)**.
-3. Configurer le rôle en tant qu'**Autorité de certification Racine d'entreprise** (Enterprise Root CA).
-4. Une fois terminé, vérifier que le port 636 est ouvert via PowerShell :
-```powershell
-Test-NetConnection -Port 636 -ComputerName localhost
-
-```
-
-
-
-### Étape 2 : Importation du Certificat Teleport
-
-L'AD doit faire confiance aux certificats utilisateurs émis par Teleport.
-
-1. Télécharger le certificat CA de Teleport depuis le serveur AD :
-* URL : `https://teleport.hexaltech.fr/webapi/auth/export?type=windows`
-
-
-2. Renommer le fichier téléchargé en **`user-ca.cer`**.
-3. Ouvrir PowerShell en **Administrateur** et exécuter :
-```powershell
-certutil -dspublish -f user-ca.cer RootCA
-certutil -dspublish -f user-ca.cer NTAuthCA
-gpupdate /force
-
-```
-
-
-
-### Étape 3 : Création du Compte de Service
-
-Teleport utilise ce compte pour scanner le réseau via LDAP.
-
-1. Créer un utilisateur standard nommé **`svc-teleport`**.
-2. Récupérer son **SID** (nécessaire pour la config Linux) :
-```powershell
-Get-AdUser -Identity "svc-teleport" | Select SID
-# SID Hexaltech : S-1-5-21-438133749-1811766057-640718-1106
-
-```
-
-
-
-### Étape 4 : Configuration de la GPO (Stratégie de Groupe)
-
-Créer une GPO nommée **"Teleport Access Policy"** et la lier à la racine du domaine. Modifier les paramètres suivants :
-
-#### A. Activation Smart Card
-
-* **Chemin** : `Configuration ordinateur > Stratégies > Paramètres Windows > Paramètres de sécurité > Services système`
-* **Service "Carte à puce"** : Définir sur **Automatique**.
-
-#### B. Sécurité RDP
-
-* **Chemin** : `Configuration ordinateur > Modèles d'administration > Composants Windows > Services Bureau à distance > Hôte de session > Sécurité`
-* **Exiger l'authentification réseau (NLA)** : **Désactivé** (Indispensable).
-* **Toujours demander le mot de passe** : **Désactivé**.
-
-#### C. Affichage et Codec (RemoteFX)
-
-* **Chemin** : `... > Hôte de session > Environnement de session à distance`
-* **Configurer RemoteFX** : **Activé**.
-* **Activer l'encodage RemoteFX** : **Activé**.
-* **Définir l'algorithme de compression RDP** : **Activé** -> Choisir **"Optimisé pour utiliser moins de mémoire réseau"**.
-
-> 💡 **Important** : Appliquer les changements sur l'AD avec la commande `gpupdate /force`.
-
----
-
-## 🐧 Phase 2 : Configuration du Bastion (Linux)
-
-Modifier le fichier de configuration `/etc/teleport.yaml`.
-
-### Configuration du Service Windows
-
-Ajouter ou modifier la section `windows_desktop_service` avec les paramètres suivants :
+### 3. Configuration du Connecteur (Sur le Bastion)
+Fichier `/etc/teleport/github-connector.yaml` :
 
 ```yaml
-windows_desktop_service:
-  enabled: "yes"
-  # Port d'écoute local du service
-  listen_addr: "0.0.0.0:3028"
-  # Adresse IP publique/LAN du bastion (Indispensable pour le routage RDP)
-  public_addr: "192.168.20.250:3028"
+kind: github
+version: v3
+metadata:
+  name: github
+spec:
+  client_id: "VOTRE_CLIENT_ID"
+  client_secret: "VOTRE_CLIENT_SECRET"
+  display: "GitHub"
+  redirect_url: "[https://teleport.hexaltech.fr/v1/webapi/github/callback](https://teleport.hexaltech.fr/v1/webapi/github/callback)"
 
-  ldap:
-    # Adresse de l'AD (Port sécurisé 636)
-    addr: "192.168.20.150:636"
-    domain: "hexaltech.lan"
-    username: "svc-teleport"
-    # Le SID récupéré à l'étape 3
-    sid: "S-1-5-21-438133749-1811766057-640718-1106"
-    # Skip la vérification SSL (car certificat AD auto-signé pour l'instant)
-    insecure_skip_verify: true
-
-  # Découverte automatique des machines
-  discovery_configs:
-    - base_dn: "DC=hexaltech,DC=lan"
-      # Filtre large pour forcer l'affichage de tous les PC/Serveurs
-      filters:
-        - "(objectClass=computer)"
+  teams_to_roles:
+    - organization: "hexaltech-organization"
+      team: "admins"
+      roles: ["access", "editor", "windows-admin"]
 
 ```
 
-### Application
+Commande d'application : `sudo tctl create -f github-connector.yaml --force`
 
-Redémarrer le service pour prendre en compte les changements et lancer le scan LDAP :
+---
 
-```bash
-sudo systemctl restart teleport
+## 🖥️ Phase 2 : Préparation Windows (AD & Clients)
+
+### 1. Configuration Active Directory (Serveur)
+
+* **Certificat :** Installer le rôle **AD CS**. Importer le certificat Teleport (`user-ca.cer`) dans les magasins **Enterprise Root CA** et **NTAuthCA**.
+* **Compte de service :** Créer un utilisateur standard `svc-teleport` et récupérer son **SID** (`Get-AdUser svc-teleport`).
+* **GPO "Teleport Access Policy"** (A appliquer sur tout le domaine) :
+* **Service "Carte à puce"** : Définir sur **Automatique**.
+* **Sécurité RDP** : **Désactiver le NLA** (Network Level Authentication) -> *Crucial sinon Teleport est rejeté.*
+* **RemoteFX** : Activé (recommandé pour les performances).
+
+
+
+### 2. Préparation des PC Clients (⚠️ CRITIQUE)
+
+Par défaut, les PC Clients (Windows 10/11) bloquent le RDP venant d'une autre IP (le Bastion) même si le service est actif.
+
+**Action obligatoire sur chaque nouveau PC :**
+Ouvrir PowerShell en Administrateur et lancer cette commande pour ouvrir le port 3389 :
+
+```powershell
+New-NetFirewallRule -DisplayName "Teleport RDP Access" -Direction Inbound -LocalPort 3389 -Protocol TCP -Action Allow -Profile Any
 
 ```
 
 ---
 
-## 👤 Phase 3 : Gestion des Accès (RBAC)
+## 🐧 Phase 3 : Configuration du Bastion (Linux)
 
-Par défaut, aucun utilisateur n'a le droit d'ouvrir une session Windows. Il faut créer un rôle.
+Fichier de configuration `/etc/teleport.yaml` complet et validé.
 
-### Étape 1 : Créer le fichier de rôle
+```yaml
+version: v3
+teleport:
+  nodename: TELEPORT-BASTION
+  data_dir: /var/lib/teleport
+  log:
+    output: stderr
+    severity: INFO
 
-Sur le bastion Linux, créer le fichier `windows-admin.yaml` :
+auth_service:
+  enabled: "yes"
+  cluster_name: "teleport.hexaltech.fr"
+  listen_addr: 0.0.0.0:3025
+  proxy_listener_mode: multiplex
+
+ssh_service:
+  enabled: "yes"
+
+proxy_service:
+  enabled: "yes"
+  web_listen_addr: "0.0.0.0:443"
+  public_addr: "teleport.hexaltech.fr:443"
+  acme:
+    enabled: "yes"
+    email: "contact@hexaltech.fr"
+
+# 1. Service Desktop (Connexion RDP/LDAP)
+windows_desktop_service:
+  enabled: "yes"
+  listen_addr: "0.0.0.0:3028"
+  public_addr: "192.168.50.250:3028"
+  ldap:
+    addr: "192.168.50.150:636"
+    domain: "hexaltech.lan"
+    username: "svc-teleport"
+    sid: "S-1-5-21-438133749-1811766057-640718-1106" # Votre SID
+    insecure_skip_verify: true
+
+# 2. Service Découverte (Scan automatique du réseau)
+discovery_service:
+  enabled: "yes"
+  discovery_configs:
+    - service_type: windows_desktop
+      base_dn: "DC=hexaltech,DC=lan"
+      filters:
+        - "(objectClass=computer)"
+      services:
+        - windows_desktop
+
+# 3. Service Applications (Accès Web Imprimantes/Switchs)
+app_service:
+  enabled: "yes"
+  apps:
+    - name: "imprimante-laser"
+      uri: "[http://192.168.1.200](http://192.168.1.200)"
+      insecure_skip_verify: true
+      labels:
+        type: "printer"
+
+```
+
+Appliquer les changements : `sudo systemctl restart teleport`
+
+---
+
+## 👤 Phase 4 : Rôle Utilisateur
+
+Ce rôle permet aux utilisateurs de l'équipe GitHub "admins" de se connecter en tant qu'administrateur local ou domaine.
+
+Fichier `role-windows-admin.yaml` :
 
 ```yaml
 kind: role
@@ -150,54 +163,47 @@ spec:
   allow:
     windows_desktop_labels:
       "*": "*"
-    # Autorise la connexion en tant qu'Administrateur du domaine
-    windows_desktop_logins: ["Administrateur", "administrateur"]
+    windows_desktop_logins: ["Administrateur", "administrateur", "Administrator"]
 
 ```
 
-### Étape 2 : Appliquer et Assigner
-
-Injecter le rôle dans Teleport et l'donner à l'utilisateur principal (`admin-hexaltech`) :
-
-```bash
-# Création du rôle
-sudo tctl create -f windows-admin.yaml
-
-# Assignation à l'utilisateur
-sudo tctl users update admin-hexaltech --set-roles=access,editor,windows-admin
-
-```
+Application : `sudo tctl create -f role-windows-admin.yaml`
 
 ---
 
-## ✅ Phase 4 : Test de Connexion
+## 🛠️ Dépannage et Erreurs Courantes
 
-1. Se connecter à l'interface Web : `https://teleport.hexaltech.fr`.
-2. Aller dans l'onglet **Resources > Desktops**.
-3. Les machines du domaine (ex: `AD-HEXA`) doivent apparaître.
-4. Cliquer sur **Connect** > Sélectionner **Administrateur**.
-5. La session RDP s'ouvre directement dans le navigateur sans demande de mot de passe.
+### 1. Erreur "Ressources système insuffisantes" (Carte à puce)
 
----
+**Symptôme :** Lors de la connexion, Windows affiche l'erreur *"Ressources système insuffisantes pour terminer le service demandé"*.
+**Cause :** Conflit entre le driver de carte à puce virtuelle Teleport et le service de propagation de certificat Windows.
 
-### 🛠️ Commandes utiles pour le dépannage
+**Solution :**
+Sur le PC Windows concerné, exécuter ces commandes en PowerShell (Admin) :
 
-* **Voir les logs en temps réel (Linux)** :
-```bash
-sudo journalctl -u teleport -f
-
-```
-
-
-* **Vérifier la connectivité LDAPS (Linux)** :
-```bash
-nc -zv 192.168.20.150 636
-
-```
-
-
-* **Forcer la mise à jour des GPO (Windows)** :
 ```powershell
-gpupdate /force
+# Arrêter et désactiver le service "Propagation du certificat"
+Stop-Service -Name CertPropSvc -Force
+Set-Service -Name CertPropSvc -StartupType Disabled
+
+# Redémarrer le PC
+Restart-Computer -Force
+
+```
+
+### 2. Erreur "Connection Timed Out" / "Disconnected"
+
+**Symptôme :** Teleport voit le PC dans la liste, mais impossible de se connecter.
+**Causes probables :**
+
+1. **Pare-feu Windows :** Le PC bloque le port 3389. -> Voir **Phase 2, étape 2** (commande `New-NetFirewallRule`).
+2. **DNS Bastion :** Le bastion n'arrive pas à résoudre le nom du PC (`ping NOM-PC`). -> Ajouter le PC dans `/etc/hosts` sur le Linux.
+
+### 3. Liste des PC vide dans Teleport
+
+* Le service de découverte met 5 à 10 minutes pour scanner les nouveaux PC.
+* Pour forcer un scan : `sudo systemctl restart teleport` sur le bastion.
+
+```
 
 ```
