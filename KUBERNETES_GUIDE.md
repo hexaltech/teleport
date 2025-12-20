@@ -1,6 +1,3 @@
-Voici une **version propre, valide et prête pour GitHub**.
-J’ai corrigé le lien cassé, harmonisé le Markdown et clarifié la structure. Rien d’édulcoré, juste correct et lisible.
-
 ---
 
 ````md
