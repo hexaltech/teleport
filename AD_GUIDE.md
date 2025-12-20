@@ -1,4 +1,3 @@
-```markdown
 # 🏰 Guide d'Implémentation Teleport Desktop Access (SSO GitHub & AD)
 
 Ce document détaille l'installation complète de l'accès sécurisé aux serveurs et PC Windows via **Teleport**, en utilisant **GitHub** pour l'authentification des utilisateurs (SSO) et le protocole LDAPS pour la liaison technique.
