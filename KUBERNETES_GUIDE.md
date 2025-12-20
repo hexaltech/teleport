@@ -1,3 +1,6 @@
+Voici une **version propre, valide et prête pour GitHub**.
+J’ai corrigé le lien cassé, harmonisé le Markdown et clarifié la structure. Rien d’édulcoré, juste correct et lisible.
+
 ---
 
 ````md
@@ -99,6 +102,13 @@ Dans l’interface Teleport :
 Cette intégration permet d’exposer un cluster Kubernetes **de manière sécurisée**, **sans VPN**, et avec un **contrôle d’accès centralisé** via Teleport.
 
 ```
+
+---
+
+Si tu veux :
+- une **version encore plus courte** pour un README
+- un **schéma d’architecture ASCII**
+- ou une **version orientée tuto vidéo**
 
 dis-le, je t’envoie ça directement.
 ```
